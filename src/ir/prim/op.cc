@@ -308,8 +308,22 @@ PrimExpr cast(PrimType t, PrimExpr value, Span span) {
   // const fold IntImm as they are used in index computations
   if (dtype.IsScalar()) {
     if (const IntImmNode* op = value.as<IntImmNode>()) {
+      if (dtype.MatchesCode(DLDataTypeCode::kDLBool)) {
+        return MakeConst(dtype, op->value != 0, op->span);
+      } else if (dtype.MatchesCode(DLDataTypeCode::kDLInt, DLDataTypeCode::kDLUInt)) {
+        return MakeConst(dtype, GetFoldResult(op->value, dtype), op->span);
+      }
       return MakeConst(dtype, op->value, op->span);
     } else if (const FloatImmNode* op = value.as<FloatImmNode>()) {
+      if (dtype.MatchesCode(DLDataTypeCode::kDLBool)) {
+        return MakeConst(dtype, op->value != 0.0, op->span);
+      } else if (dtype.MatchesCode(DLDataTypeCode::kDLInt, DLDataTypeCode::kDLUInt)) {
+        if (!std::isfinite(op->value)) {
+          return prim::Cast(std::move(t), value, span);
+        }
+        ffi::BigInt int_val(static_cast<int64_t>(op->value));
+        return MakeConst(dtype, GetFoldResult(int_val, dtype), op->span);
+      }
       return MakeConst(dtype, op->value, op->span);
     }
     return prim::Cast(std::move(t), value, span);
